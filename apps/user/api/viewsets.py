@@ -1,12 +1,12 @@
 from rest_framework import viewsets, status, generics
 from rest_framework.response import Response
-from .serializers import CallTakerCreateSerializer, CallTakerListSerializer
+from .serializers import CallTakerCreateSerializer, CallTakerListSerializer, CallTakerUpdateSerializer
 from ..models import CallTaker
 from common.helpers.api_responses import api_response
+from mongoengine import DoesNotExist
 
 class createUser(generics.CreateAPIView):
     def create(self, request):
-        """Crear un nuevo CallTaker."""
         serializer = CallTakerCreateSerializer(data=request.data)
         if serializer.is_valid():
             call_taker = serializer.save()
@@ -14,28 +14,50 @@ class createUser(generics.CreateAPIView):
             return Response(response_data, status=status.HTTP_201_CREATED)
         response_data = api_response(False, [], serializer.errors)
         return Response(response_data, status=status.HTTP_400_BAD_REQUEST)
-
 class ListCallTakers(generics.ListAPIView):
-    queryset = CallTaker.objects()  # Asegúrate de usar el modelo aquí
+    queryset = CallTaker.objects.all()
     serializer_class = CallTakerListSerializer
 
     def get(self, request, *args, **kwargs):
-        """Listar todos los CallTakers."""
         call_takers = self.get_queryset()
         serializer = self.get_serializer(call_takers, many=True)
         response_data = api_response(True, serializer.data, "Successfully retrieved")
         return Response(response_data, status=status.HTTP_200_OK)
-    
 class ListCallTakersByCode(generics.ListAPIView):
     serializer_class = CallTakerListSerializer
 
     def get_queryset(self):
-        code = self.kwargs.get('code')  # Obtiene el código de los parámetros de la URL
-        return CallTaker.objects.filter(code=code)  # Filtra por el código proporcionado
+        code = self.kwargs.get('code')
+        return CallTaker.objects.filter(code=code)
 
     def get(self, request, *args, **kwargs):
-        """Listar CallTakers filtrados por code."""
         call_takers = self.get_queryset()
         serializer = self.get_serializer(call_takers, many=True)
         response_data = api_response(True, serializer.data, "Successfully retrieved")
         return Response(response_data, status=status.HTTP_200_OK)
+class UpdateCallTaker(generics.UpdateAPIView):
+    serializer_class = CallTakerUpdateSerializer
+
+    def get_object(self):
+        call_taker_id = self.kwargs['pk']
+        try:
+            return CallTaker.objects.get(id=call_taker_id)
+        except DoesNotExist:
+            return None
+
+    def put(self, request, *args, **kwargs):
+        call_taker = self.get_object()
+        if call_taker is None:
+            response_data = api_response(False, [], "CallTaker not found")
+            return Response(response_data, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = self.get_serializer(call_taker, data=request.data)
+
+        # Asegúrate de llamar a is_valid() antes de acceder a serializer.data
+        if serializer.is_valid():
+            updated_call_taker = serializer.save()
+            response_data = api_response(True, serializer.data, "Successfully updated")
+            return Response(response_data, status=status.HTTP_200_OK)
+
+        response_data = api_response(False, [], serializer.errors)
+        return Response(response_data, status=status.HTTP_400_BAD_REQUEST)
