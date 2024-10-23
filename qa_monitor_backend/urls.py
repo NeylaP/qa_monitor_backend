@@ -22,4 +22,5 @@ apiv1 = "api/v1.0/"
 urlpatterns = [
     path('admin/', admin.site.urls),
     path(apiv1, include("apps.user.urls")),
+    path(apiv1, include("apps.transcription.urls")),
 ]
