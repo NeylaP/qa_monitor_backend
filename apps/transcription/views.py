@@ -6,9 +6,6 @@ from rest_framework import status
 from .api.transcription import generate_transcription_files, load_dictionary, load_replacement_dict
 
 class TranscriptionAPIView(APIView):
-    def get(self, request):
-        return Response({'error': 'Este endpoint solo acepta solicitudes POST.'}, status=status.HTTP_405_METHOD_NOT_ALLOWED)
-
     def post(self, request):
         # Construir rutas a partir del directorio static
         source_dir = os.path.join(settings.STATIC_ROOT, "input/")

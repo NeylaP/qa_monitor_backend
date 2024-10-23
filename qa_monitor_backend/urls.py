@@ -23,4 +23,5 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path(apiv1, include("apps.user.urls")),
     path(apiv1, include("apps.transcription.urls")),
+    path(apiv1, include("apps.evaluation.urls")),
 ]

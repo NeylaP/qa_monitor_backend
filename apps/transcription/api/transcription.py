@@ -8,6 +8,7 @@ import librosa
 from pymongo import MongoClient
 from difflib import get_close_matches
 from pyannote.audio import Pipeline
+import re
 
 DEFAULT_MODEL = "small"
 client = MongoClient('mongodb://localhost:27017/')
@@ -40,18 +41,21 @@ def load_replacement_dict(file_path):
     return dict(zip(df['original'], df['replacement']))
 
 def correct_transcription(transcription, word_dict, replacement_dict):
+    
     for phrase, replacement in replacement_dict.items():
-        transcription = transcription.replace(phrase.lower(), str(replacement))
-
-    corrected_text = []
-    for word in transcription.split():
-        if word_dict and word.lower() not in word_dict:
-            close_match = get_close_matches(word.lower(), word_dict, n=1, cutoff=0.6)
-            corrected_text.append(close_match[0] if close_match else word)
-        else:
-            corrected_text.append(word)
-
-    return ' '.join(corrected_text)
+        transcription = re.sub(re.escape(phrase.lower()), replacement, transcription, flags=re.IGNORECASE)
+        print(f"Reemplazando '{phrase.lower()}' con '{replacement}'")
+        
+    if word_dict:
+        corrected_text = []
+        for word in transcription.split():
+            if word.lower() not in word_dict:
+                close_match = get_close_matches(word.lower(), word_dict, n=1, cutoff=0.6)
+                corrected_text.append(close_match[0] if close_match else word)
+            else:
+                corrected_text.append(word)
+        return ' '.join(corrected_text)
+    return transcription
 
 def assign_word_speakers(diarize_df, transcript_result):
     for seg in transcript_result["segments"]:
@@ -78,7 +82,6 @@ def format_time(seconds):
 
 def generate_transcription_files(source_dir, target_dir, reviewed_dir, model_name=DEFAULT_MODEL, word_dict=None, replacement_dict=None):
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    print("Dispositivo:", device)
     whisper_model = whisper.load_model(model_name, device=device)
     diarization_model = DiarizationPipeline(device=device)
 
@@ -105,11 +108,12 @@ def generate_transcription_files(source_dir, target_dir, reviewed_dir, model_nam
 
                 first_speech_time = detect_initial_silence(audio_path)
                 transcription_result = whisper_model.transcribe(audio_path)
-                print("Estoy aquiiii")
-                print(word_dict)
+                
                 if word_dict or replacement_dict:
                     for segment in transcription_result['segments']:
-                        segment['text'] = correct_transcription(segment['text'], word_dict, replacement_dict)
+                        original_text = segment['text']
+                        segment['text'] = correct_transcription(original_text, word_dict, replacement_dict)
+                        print(f"Texto original: '{original_text}' => Texto corregido: '{segment['text']}'")
 
                 df_transcription = pd.DataFrame(transcription_result['segments'])[['id', 'start', 'end', 'text']]
                 df_transcription['start'] += first_speech_time
