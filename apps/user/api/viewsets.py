@@ -14,7 +14,7 @@ class createUser(generics.CreateAPIView):
             return Response(response_data, status=status.HTTP_201_CREATED)
         response_data = api_response(False, [], serializer.errors)
         return Response(response_data, status=status.HTTP_400_BAD_REQUEST)
-class ListCallTakers(generics.ListAPIView):
+class listCallTakers(generics.ListAPIView):
     queryset = CallTaker.objects.all()
     serializer_class = CallTakerListSerializer
 
@@ -23,7 +23,7 @@ class ListCallTakers(generics.ListAPIView):
         serializer = self.get_serializer(call_takers, many=True)
         response_data = api_response(True, serializer.data, "Successfully retrieved")
         return Response(response_data, status=status.HTTP_200_OK)
-class ListCallTakersByCode(generics.ListAPIView):
+class listCallTakersByCode(generics.ListAPIView):
     serializer_class = CallTakerListSerializer
 
     def get_queryset(self):
@@ -35,7 +35,7 @@ class ListCallTakersByCode(generics.ListAPIView):
         serializer = self.get_serializer(call_takers, many=True)
         response_data = api_response(True, serializer.data, "Successfully retrieved")
         return Response(response_data, status=status.HTTP_200_OK)
-class UpdateCallTaker(generics.UpdateAPIView):
+class updateCallTaker(generics.UpdateAPIView):
     serializer_class = CallTakerUpdateSerializer
 
     def get_object(self):

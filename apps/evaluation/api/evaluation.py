@@ -3,26 +3,33 @@ import torch
 from transformers import BertTokenizer, BertModel
 from ..models import Questions, EvaluationResults
 from ...transcription.models import Transcriptions
+from datetime import datetime
 
 # Inicializar el tokenizador y modelo BERT
 tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
 model = BertModel.from_pretrained('bert-base-uncased')
 
 def load_questions():
-    print("load_questions")
-    questions = Questions.objects.all()
-    print(f"Question: {questions}")
-    questions_df = pd.DataFrame([{
+    try:
+        questions = Questions.objects.all()
+
+        questions_df = pd.DataFrame([{
             'text': question.text,
             'keywords': question.keywords,
             'correct_score': question.correct_score,
-            'incorrect_score': question.incorrect_score
+            'incorrect_score': question.incorrect_score,
+            'group': question.group['description'] if question.group else None
         } for question in questions])
-    return questions_df
+
+        return questions_df
+
+    except Exception as e:
+        print(f"Error loading questions: {e}")
+        return pd.DataFrame() 
 
 def obtain_score(conversation_text, question_dataset):
-    print("obtain_score")
     total_score = 0
+    group_results = {}
     results = []
 
     for index, row in question_dataset.iterrows():
@@ -30,21 +37,46 @@ def obtain_score(conversation_text, question_dataset):
         keywords = row['keywords']
         correct_score = row['correct_score']
         incorrect_score = row['incorrect_score']
+        group = row['group']
 
-        if any(keyword.lower() in conversation_text.lower() for keyword in keywords):
-            total_score += correct_score
-            results.append({"Pregunta": question, "Calificación": correct_score})
+        is_correct = any(keyword.lower() in conversation_text.lower() for keyword in keywords)
+
+        if group:
+            if group not in group_results:
+                group_results[group] = {
+                    "scores": [],
+                    "group_description": group,
+                    "questions": []
+                }
+
+            group_results[group]["scores"].append(correct_score if is_correct else incorrect_score)
+            group_results[group]["questions"].append({
+                "question": question,
+                "qualification": correct_score if is_correct else incorrect_score
+            })
         else:
-            total_score += incorrect_score
-            results.append({"Pregunta": question, "Calificación": incorrect_score})
+            total_score += correct_score if is_correct else incorrect_score
+            results.append({
+                "question": question,
+                "qualification": correct_score if is_correct else incorrect_score
+            })
+
+    for group, result in group_results.items():
+        lowest_score = min(result["scores"])
+        total_score += lowest_score
+        
+        results.append({
+            "question": result["group_description"],
+            "qualification": lowest_score
+        })
 
     return total_score, pd.DataFrame(results)
 
+
 def analyze_conversation(conversation, questions):
-    print("analyze_conversation")
     texts = [transcription['text'] for transcription in conversation.transcriptions]
     conversation_text = ' '.join(texts)
-    
+
     # Tokenizar el texto de la conversación
     tokens = tokenizer(conversation_text, return_tensors='pt', truncation=True, padding=True)
     with torch.no_grad():
@@ -55,25 +87,20 @@ def analyze_conversation(conversation, questions):
     result_eval = EvaluationResults(
         file_name=conversation.file_name,
         results=results.to_dict(orient='records'),
-        date=conversation.date,
+        date= datetime.strptime(conversation.date, '%d-%m-%Y'),
         agent=conversation.agent,
         call_type=conversation.call_type
     )
     result_eval.save()
-    
-    # update_review(conversation)
-    print(f"Puntuación total para la conversación {conversation.id}: {total_score}")
-    print(results)
+
+    update_review(conversation)
 
 def update_review(conversation):
-    print("Actualizando revisión para id:", conversation.id)
     conversation.is_revised = 1
     conversation.save()
 
 def process_conversations():
     conversations = Transcriptions.objects(is_revised=0)
-    print(f"Encontradas {conversations.count()} conversaciones no revisadas.")
     questions = load_questions()
-    print(f"questions {questions}")
     for conversation in conversations:
         analyze_conversation(conversation, questions)
